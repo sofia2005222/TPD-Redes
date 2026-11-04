@@ -1,4 +1,5 @@
 #include "md5.h"
+#include <string.h>
 
 void md5_init(md5_ctx *ctx)
 {
