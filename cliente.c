@@ -1,8 +1,11 @@
+#define _POSIX_C_SOURCE 200809L   /* getaddrinfo, clock_gettime con -std=c11 */
+
 #include "http_ip.h"
 #include "proto.h"
 
 #include <netdb.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -10,9 +13,9 @@
 #include <poll.h>
 #include <time.h>
 
-/* Credenciales del grupo, provistas por la catedra */
+/* Usuario del grupo, provisto por la catedra.
+El secreto NO se escribe en el codigo: se pasa con -k <secreto> o con la variable TP_SECRET. */
 #define USERNAME "grupo09"
-#define SECRET   "Dl9at4WI"
 
 /* Servidor de la catedra (IP y puerto UDP) */
 #define SERVER_IP   "167.114.129.206"
@@ -31,8 +34,31 @@ Sirve para calcular cuanto tiempo paso.
     return (long)ts.tv_sec * 1000L + ts.tv_nsec / 1000000L;
 }
 
-int main(void)
+static const char *get_secret(int argc, char *argv[])
+/* Devuelve el secreto: primero mira si se paso "-k <secreto>", si no usa la variable de
+entorno TP_SECRET. Devuelve NULL si no hay ninguno (o esta vacio).
+*/
 {
+    const char *secret = NULL;
+    if (argc == 3 && strcmp(argv[1], "-k") == 0) {
+        secret = argv[2];
+    } else if (argc == 1) {
+        secret = getenv("TP_SECRET");
+    }
+    if (secret == NULL || secret[0] == '\0') {
+        return NULL;
+    }
+    return secret;
+}
+
+int main(int argc, char *argv[])
+{
+    const char *secret = get_secret(argc, argv);
+    if (secret == NULL) {
+        fprintf(stderr, "Uso: %s -k <secreto>   (o definir la variable TP_SECRET)\n", argv[0]);
+        return 1;
+    }
+
     char public_ip[16];
     char request[PROTO_MAX_MSG];
 
@@ -46,7 +72,7 @@ int main(void)
     
     /* Paso 3: armar el pedido */
     //"<usuario>|<ip>|<firma>". El secreto se usa para firmar pero no queda en request.
-    if (proto_build_request(USERNAME, public_ip, SECRET, request, sizeof(request)) != 0) {
+    if (proto_build_request(USERNAME, public_ip, secret, request, sizeof(request)) != 0) {
         fprintf(stderr, "Error: no se pudo armar el pedido\n");
         return 1;
     }
@@ -131,7 +157,7 @@ int main(void)
         }
 
         /* Paso 6: interpretar la respuesta */
-        result = proto_parse_response(buf, (size_t)n, SECRET, &tcp_port, error_text, sizeof(error_text));
+        result = proto_parse_response(buf, (size_t)n, secret, &tcp_port, error_text, sizeof(error_text));
         if (result == PROTO_OK || result == PROTO_REJECTED) {
             break;
         }
