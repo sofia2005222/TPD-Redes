@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -Wall -Wextra
 
-all: cliente test_md5 test_ip test_proto test_framing
+all: cliente test_md5 test_ip test_proto test_framing test_tcp
 
 test_md5: test_md5.c md5.c md5.h
 	$(CC) $(CFLAGS) -o test_md5 test_md5.c md5.c
@@ -16,10 +16,14 @@ test_framing: test_framing.c framing.c framing.h
 	$(CC) $(CFLAGS) -o test_framing test_framing.c framing.c
 	./test_framing
 
+test_tcp: test_tcp.c tcp_client.c tcp_client.h framing.c framing.h
+	$(CC) $(CFLAGS) -o test_tcp test_tcp.c tcp_client.c framing.c
+	./test_tcp
+
 cliente: cliente.c proto.c proto.h md5.c md5.h http_ip.c http_ip.h
 	$(CC) $(CFLAGS) -o cliente cliente.c proto.c md5.c http_ip.c
 
 clean:
-	rm -f cliente test_md5 test_ip test_proto test_framing
+	rm -f cliente test_md5 test_ip test_proto test_framing test_tcp
 
 .PHONY: all clean
