@@ -1,29 +1,45 @@
-CC = gcc
-CFLAGS = -Wall -Wextra
+CC     = gcc
+CFLAGS = -Wall -Wextra -Isrc
 
-all: cliente test_md5 test_ip test_proto test_framing test_tcp
+SRC   = src
+TESTS = tests
+BIN   = bin
 
-test_md5: test_md5.c md5.c md5.h
-	$(CC) $(CFLAGS) -o test_md5 test_md5.c md5.c
+# Modulos comunes (cada uno es un .c con su .h en src/)
+MD5     = $(SRC)/md5.c $(SRC)/md5.h
+HTTP_IP = $(SRC)/http_ip.c $(SRC)/http_ip.h
+PROTO   = $(SRC)/proto.c $(SRC)/proto.h
+FRAMING = $(SRC)/framing.c $(SRC)/framing.h
+TCP     = $(SRC)/tcp_client.c $(SRC)/tcp_client.h
 
-test_ip: http_test_ip.c http_ip.c http_ip.h
-	$(CC) $(CFLAGS) -o test_ip http_test_ip.c http_ip.c
+all: $(BIN)/cliente $(BIN)/test_md5 $(BIN)/test_ip $(BIN)/test_proto $(BIN)/test_framing $(BIN)/test_tcp
 
-test_proto: test_proto.c proto.c proto.h md5.c md5.h
-	$(CC) $(CFLAGS) -o test_proto test_proto.c proto.c md5.c
-	./test_proto
-test_framing: test_framing.c framing.c framing.h
-	$(CC) $(CFLAGS) -o test_framing test_framing.c framing.c
-	./test_framing
+# Crea la carpeta de ejecutables si no existe
+$(BIN):
+	mkdir -p $(BIN)
 
-test_tcp: test_tcp.c tcp_client.c tcp_client.h framing.c framing.h
-	$(CC) $(CFLAGS) -o test_tcp test_tcp.c tcp_client.c framing.c
-	./test_tcp
+$(BIN)/cliente: $(SRC)/cliente.c $(PROTO) $(MD5) $(HTTP_IP) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(SRC)/cliente.c $(SRC)/proto.c $(SRC)/md5.c $(SRC)/http_ip.c
 
-cliente: cliente.c proto.c proto.h md5.c md5.h http_ip.c http_ip.h
-	$(CC) $(CFLAGS) -o cliente cliente.c proto.c md5.c http_ip.c
+$(BIN)/test_md5: $(TESTS)/test_md5.c $(MD5) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(TESTS)/test_md5.c $(SRC)/md5.c
+
+$(BIN)/test_ip: $(TESTS)/http_test_ip.c $(HTTP_IP) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(TESTS)/http_test_ip.c $(SRC)/http_ip.c
+
+$(BIN)/test_proto: $(TESTS)/test_proto.c $(PROTO) $(MD5) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(TESTS)/test_proto.c $(SRC)/proto.c $(SRC)/md5.c
+	./$@
+
+$(BIN)/test_framing: $(TESTS)/test_framing.c $(FRAMING) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(TESTS)/test_framing.c $(SRC)/framing.c
+	./$@
+
+$(BIN)/test_tcp: $(TESTS)/test_tcp.c $(TCP) $(FRAMING) | $(BIN)
+	$(CC) $(CFLAGS) -o $@ $(TESTS)/test_tcp.c $(SRC)/tcp_client.c $(SRC)/framing.c
+	./$@
 
 clean:
-	rm -f cliente test_md5 test_ip test_proto test_framing test_tcp
+	rm -rf $(BIN)
 
 .PHONY: all clean

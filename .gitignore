@@ -1,6 +1,1 @@
-cliente
-test_md5
-test_ip
-test_proto
-test_framing
-test_tcp
+bin/
