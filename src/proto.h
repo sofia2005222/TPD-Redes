@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 
-#define PROTO_MAX_MSG 512
+#define PROTO_MAX_MSG 1024
 
 typedef enum {
     PROTO_OK,        /* 200 con firma válida -> tenemos puerto */
