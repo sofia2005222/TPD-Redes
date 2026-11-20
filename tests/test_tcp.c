@@ -59,7 +59,7 @@ static int listen_local(int *port)
     socklen_t len = sizeof(addr);
 
     addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
     addr.sin_port = 0;   /* 0 = que el sistema elija */
     if (s == -1 || bind(s, (struct sockaddr *)&addr, sizeof(addr)) == -1 || listen(s, 1) == -1
         || getsockname(s, (struct sockaddr *)&addr, &len) == -1) {
