@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include "http_ip.h"
 #include <netdb.h>
 #include <sys/socket.h>

@@ -1,8 +1,10 @@
 #define _POSIX_C_SOURCE 200809L   /* getaddrinfo, clock_gettime con -std=c11 */
 
 #include "http_ip.h"
+#include "pdu.h"
 #include "proto.h"
-
+#include "tcp_client.h"
+#include <errno.h>
 #include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,6 +25,48 @@ El secreto NO se escribe en el codigo: se pasa con -k <secreto> o con la variabl
 
 /* Tiempo maximo total de espera de la respuesta */
 #define TIMEOUT_MS 10000
+
+typedef struct {
+    int udp_fd;
+    struct sockaddr_in dst;
+    const char *secret;
+    size_t received;
+    size_t forwarded;
+    size_t discarded;
+    size_t send_errors;
+} fwd_ctx;
+
+static void forward_pdu(const char *pdu, size_t len, int truncated, void *arg)
+{
+    fwd_ctx *ctx = arg;
+    char msg[FORWARD_MSG_MAX];
+    ctx->received++;
+    /* Para una linea truncada se procesa el prefijo que conservo el framer. */
+    (void)truncated;
+    int code = pdu_parse(pdu, len, time(NULL));
+    int n = build_forward_msg(USERNAME, pdu, len, code, ctx->secret, msg, sizeof(msg));
+    if (n < 0) {
+        ctx->discarded++;
+        return;
+    }
+
+    ssize_t sent;
+    do {
+        sent = sendto(ctx->udp_fd, msg, (size_t)n, 0,
+                      (struct sockaddr *)&ctx->dst, sizeof(ctx->dst));
+    } while (sent == -1 && errno == EINTR);
+
+    if (sent == n) {
+        ctx->forwarded++;
+    } else {
+        if (sent == -1) {
+            perror("Error al reenviar PDU");
+        } else {
+            fprintf(stderr, "Error: envio UDP incompleto\n");
+        }
+        ctx->send_errors++;
+    }
+}
 
 static long now_ms(void)
 /* Devuelve el tiempo actual en milisegundos, medido con un reloj que solo avanza.
@@ -164,13 +208,28 @@ int main(int argc, char *argv[])
         //PROTO_DISCARD: se ignora en silencio y se sigue esperando lo que queda del plazo.
     }
 
-    close(sock);
-
-    /* Paso 7: mostrar el resultado */
     if (result == PROTO_OK) {
+        int tcp_fd = tcp_connect_host(SERVER_IP, tcp_port, TIMEOUT_MS);
+        if (tcp_fd == -1) {
+            close(sock);
+            return 1;
+        }
         printf("Autenticacion exitosa. Puerto TCP: %d\n", tcp_port);
-        return 0;
+        framer f;
+        fwd_ctx ctx = { .udp_fd = sock, .dst = server_addr, .secret = secret };
+        framer_init(&f);
+        int rc = tcp_receive_pdus(tcp_fd, &f, forward_pdu, &ctx, TIMEOUT_MS);
+        close(tcp_fd);
+        close(sock);
+
+        if (framer_pending(&f) > 0) {
+            fprintf(stderr, "Quedaron bytes de una PDU sin CR LF al terminar TCP\n");
+        }
+        printf("PDUs recibidas: %zu, reenviadas: %zu, descartadas: %zu, fallos de envio: %zu\n",
+               ctx.received, ctx.forwarded, ctx.discarded, ctx.send_errors);
+        return rc != 0 || ctx.send_errors > 0;
     }
+    close(sock);
     if (result == PROTO_REJECTED) {
         fprintf(stderr, "El servidor rechazo el pedido: %s\n", error_text);
         return 1;
